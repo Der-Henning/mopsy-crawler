@@ -1,0 +1,13 @@
+version: '2'
+services:
+    base:
+        image: python:3.8
+        volumes:
+            - .:/home/app
+        working_dir: /home/app
+    bash:
+        extends:
+            service: base
+        stdin_open: true
+        tty: true
+        command: /bin/bash
