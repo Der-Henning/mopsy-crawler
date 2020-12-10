@@ -1,13 +1,19 @@
-version: '2'
+version: '3'
 services:
-    base:
-        image: python:3.8
+    crawler:
+        build: .
+        ports:
+            - 5000:5000
         volumes:
-            - .:/home/app
-        working_dir: /home/app
-    bash:
-        extends:
-            service: base
-        stdin_open: true
-        tty: true
-        command: /bin/bash
+            - /volume1/media/books:/books:ro
+        environment:
+            CRAWLER_NAME: Calibre
+            MOPSY_MYSQL_DATABASE: mopsy
+            MOPSY_MYSQL_HOST: db
+            MOPSY_MYSQL_PORT: 3306
+            MOPSY_MYSQL_USERNAME: mopsy
+            MOPSY_MYSQL_PASSWORD: mopsy
+            MOPSY_SOLR_HOST: solr
+            MOPSY_SOLR_PORT: 8983
+            MOPSY_SOLR_CORE: dvcore
+            MOPSY_SOLR_PREFIX: calibre

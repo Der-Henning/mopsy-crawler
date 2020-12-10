@@ -1,2 +1,2 @@
-bash:
-	docker-compose -f docker-compose.builder.yml run --rm bash
+start:
+	docker-compose -f docker-compose.builder.yml up --build
