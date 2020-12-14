@@ -3,7 +3,7 @@ services:
     crawler:
         build: .
         ports:
-            - 5000:5000
+            - 6000:80
         volumes:
             - /volume1/media/books:/books:ro
         environment:
@@ -13,7 +13,7 @@ services:
             MOPSY_MYSQL_PORT: 3306
             MOPSY_MYSQL_USERNAME: mopsy
             MOPSY_MYSQL_PASSWORD: mopsy
-            MOPSY_SOLR_HOST: solr
-            MOPSY_SOLR_PORT: 8983
-            MOPSY_SOLR_CORE: dvcore
+            MOPSY_SOLR_HOST: server1
+            MOPSY_SOLR_PORT: 1235
+            MOPSY_SOLR_CORE: mopsy
             MOPSY_SOLR_PREFIX: calibre

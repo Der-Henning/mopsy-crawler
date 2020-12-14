@@ -1,29 +1,26 @@
 import flask
 from flask import request, jsonify
 import crawler
+import os
 
 server = flask.Flask(__name__)
 server.config["DEBUG"] = True
+PORT = os.getenv("PORT", 80)
 
 @server.route("/", methods=['GET'])
 def status():
-   return crawler.status()
+   return jsonify(crawler.getStatus())
 
 @server.route("/start", methods=['POST'])
 def start():
-   return crawler.start()
+   return jsonify(crawler.start())
 
 @server.route("/stop", methods=['POST'])
 def stop():
-   return crawler.stop()
+   return jsonify(crawler.stop())
 
-@server.route("/config", methods=['GET'])
-def getConfig():
-   return jsonify(crawler.getConfig())
-
-@server.route("/config", methods=['POST'])
-def setConfig():
-   return crawler.setConfig()
+def startServer():
+   server.run(host='0.0.0.0', port=PORT)
 
 if __name__ == "__main__":
-   server.run(host='0.0.0.0')
+   startServer()

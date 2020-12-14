@@ -3,8 +3,9 @@ services:
     crawler:
         image: derhenning/mopsy-crawler-calibre:latest
         ports:
-            - 5000:5000
+            - 5000:80
         environment:
+            PORT: 80
             CRAWLER_NAME: Calibre
             MOPSY_MYSQL_DATABASE: mopsy
             MOPSY_MYSQL_HOST: db
@@ -13,5 +14,5 @@ services:
             MOPSY_MYSQL_PASSWORD: mopsy
             MOPSY_SOLR_HOST: solr
             MOPSY_SOLR_PORT: 8983
-            MOPSY_SOLR_CORE: dvcore
+            MOPSY_SOLR_CORE: mopsy
             MOPSY_SOLR_PREFIX: calibre
