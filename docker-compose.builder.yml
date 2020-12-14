@@ -5,7 +5,7 @@ services:
         ports:
             - 6000:80
         volumes:
-            - /volume1/media/books:/books:ro
+            - /volume1/media/books:/mnt/books:ro
         environment:
             CRAWLER_NAME: Calibre
             MOPSY_MYSQL_DATABASE: mopsy

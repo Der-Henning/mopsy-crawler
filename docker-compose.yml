@@ -4,6 +4,8 @@ services:
         image: derhenning/mopsy-crawler-calibre:latest
         ports:
             - 5000:80
+        volumes:
+            - /volume1/media/books:/mnt/books:ro
         environment:
             PORT: 80
             CRAWLER_NAME: Calibre

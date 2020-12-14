@@ -7,7 +7,7 @@ import hashlib
 from solr import Solr
 from bs4 import BeautifulSoup
 
-calibre_path = "/books"
+calibre_path = "/mnt/books"
 
 manager = Manager()
 prozStatus = manager.Value(c_wchar_p, "")
@@ -42,7 +42,7 @@ def stop():
     return getStatus()
 
 def getStatus():
-    return {"status": prozStatus.value, "progress": prozProgress.value, "text": prozText.value}
+    return {"name": CRAWLER_NAME, "status": prozStatus.value, "progress": prozProgress.value, "text": prozText.value, "startable": prozStartable.value}
 
 def worker(stopped, text, progress, status, startable):
     status.value = "läuft"
@@ -90,7 +90,8 @@ def getDocuments():
         conn = None
         try:
             conn = sqlite3.connect(db_file)
-        except Error as e:
+        except:
+            e = sys.exc_info()[0]
             print(e)
         return conn
 
@@ -151,19 +152,20 @@ def indexer(doc):
     if len(solrDoc["response"]["docs"]) > 0:
         md5 = solrDoc["response"]["docs"][0]["md5"]
     fileExtension = doc["formats"][0].lower()
-    doc["filename"] = os.path.join(doc["path"], doc["file"] + "." + fileExtension)
+    filename = doc["file"] + "." + fileExtension
+    doc["file"] = os.path.join(doc["path"], filename)
 
-    doc["md5"] = tomd5(doc["filename"])
+    doc["md5"] = tomd5(doc["file"])
     if md5 != doc["md5"]:
         print("new Document")
 
-        extract = solr.extract(doc["filename"])
-        meta = extract[f"{doc['file']}.{fileExtension}_metadata"]
+        extract = solr.extract(doc["file"])
+        meta = extract[f"{filename}_metadata"]
         meta = dict(zip(meta[::2], meta[1::2]))
 
         doc['language'] = meta['language'][0].lower() if "language" in meta else "de"
         doc['language'] = doc['language'] if doc['language'] == "de" or doc['language'] == "en" else "other"
-        doc.update({f"{num}_page_txt_{doc['language']}": page for num, page in enumerate(getPages(extract[f"{doc['file']}.{fileExtension}"]), start=1)})
+        doc.update({f"p_{num}_page_txt_{doc['language']}": page for num, page in enumerate(getPages(extract[filename]), start=1)})
         doc[f"title_txt_{doc['language']}"] = doc["title"]
         doc[f"tags_txt_{doc['language']}"] = doc["tags"]
         doc.pop("tags", None)
