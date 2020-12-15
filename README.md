@@ -1,2 +1,2 @@
-# mopsy-crawler-calibre
-MOPSY Crawler for Calibre Books Database
+# MOPSY Crawlers
+Crawlers for MOPSY Search
