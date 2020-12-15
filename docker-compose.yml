@@ -8,7 +8,10 @@ services:
             - /volume1/media/books:/mnt/books:ro
         environment:
             PORT: 80
-            CRAWLER_NAME: Calibre
+            DEBUG: false
+            CRAWLER_TYPE: calibre
+            CRAWLER_NAME: Calibre V1.0
+            CALIBRE_PATH: /mnt/books
             MOPSY_MYSQL_DATABASE: mopsy
             MOPSY_MYSQL_HOST: db
             MOPSY_MYSQL_PORT: 3306

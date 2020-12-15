@@ -1,13 +1,10 @@
 import os
 import sys
-import sqlite3
 from multiprocessing import Process, Value, Manager
 from ctypes import c_wchar_p, c_bool, c_double
 import hashlib
 from solr import Solr
 from bs4 import BeautifulSoup
-
-calibre_path = "/mnt/books"
 
 manager = Manager()
 prozStatus = manager.Value(c_wchar_p, "")
@@ -17,10 +14,14 @@ prozStop = manager.Value(c_bool, False)
 prozStartable = manager.Value(c_bool, True)
 
 CRAWLER_NAME = os.getenv("CRAWLER_NAME", "Calibre")
+CRAWLER = os.getenv("CRAWLER_TYPE", "calibre")
 PREFIX = os.getenv("MOPSY_SOLR_PREFIX", "calibre")
 SOLR_HOST = os.getenv("MOPSY_SOLR_HOST", "solr")
 SOLR_PORT = os.getenv("MOPSY_SOLR_PORT", 8983)
 SOLR_CORE = os.getenv("MOPSY_SOLR_CORE", "mopsy")
+
+sys.path.insert(0, f"./sources")
+Documents = __import__(CRAWLER).Documents
 
 solr = Solr(SOLR_HOST, SOLR_PORT, SOLR_CORE)
 
@@ -45,25 +46,23 @@ def getStatus():
     return {"name": CRAWLER_NAME, "status": prozStatus.value, "progress": prozProgress.value, "text": prozText.value, "startable": prozStartable.value}
 
 def worker(stopped, text, progress, status, startable):
-    status.value = "läuft"
     try:
         status.value = "Calibre Datenbank einlesen ..."
-        documents = getDocuments()
+        documents = Documents(PREFIX)
 
         status.value = "Nicht mehr vorhandene Documente löschen ..."
         cleanup(documents)
 
         status.value = "Documente werden indiziert ..."
-        counter = 0
-        for doc in documents:
+        for idx, doc in enumerate(documents):
             if stopped.value:
                 break
             try:
-                progress.value = round(counter / len(documents) * 100, 2)
+                progress.value = round(idx / len(documents) * 100, 2)
                 text.value = doc["title"]
                 indexer(doc)
-            finally:
-                counter += 1
+            except:
+                print(sys.exc_info())
         
         status.value = "Erzeuge Index für Suchvorschläge ..."
         text.value = ""
@@ -79,57 +78,25 @@ def worker(stopped, text, progress, status, startable):
     finally:
         startable.value = True
 
-def getDocuments():
-    def dict_factory(cursor, row):
-        d = {}
-        for idx, col in enumerate(cursor.description):
-            d[col[0]] = row[idx]
-        return d
-
-    def create_connection(db_file):
-        conn = None
-        try:
-            conn = sqlite3.connect(db_file)
-        except:
-            e = sys.exc_info()[0]
-            print(e)
-        return conn
-
-    conn = create_connection(os.path.join(calibre_path, "metadata.db"))
-    conn.row_factory = dict_factory
-    with conn:
-        cur = conn.cursor()
-        cur.execute("SELECT id, title, pubdate, path, isbn FROM books")
-        documents = cur.fetchall()
-        for doc in documents:
-            doc["authors"] = [a['name'] for a in cur.execute("SELECT name FROM books_authors_link LEFT JOIN authors ON author=authors.id WHERE book={}".format(doc["id"])).fetchall()]
-            doc["publishers"] = [p['name'] for p in cur.execute("SELECT name FROM books_publishers_link LEFT JOIN publishers ON publisher=publishers.id WHERE book={}".format(doc["id"])).fetchall()]
-            data = cur.execute("SELECT format, name FROM data WHERE book={}".format(doc["id"])).fetchall()
-            doc["formats"] = [d["format"] for d in data]
-            if len(data) > 0 : doc["file"] = data[0]["name"]
-            doc["tags"] = [t["name"] for t in cur.execute("SELECT name FROM books_tags_link LEFT JOIN tags ON tag=tags.id WHERE book={}".format(doc["id"])).fetchall()]
-            ratings = [r["rating"] for r in cur.execute("SELECT ratings.rating FROM books_ratings_link LEFT JOIN ratings ON books_ratings_link.rating=ratings.id WHERE book={}".format(doc["id"])).fetchall()]
-            if len(ratings) > 0 : doc["rating"] = ratings[0]
-            # doc["identifiers"] = cur.execute("SELECT type, val FROM identifiers WHERE book={}".format(doc["id"])).fetchall()
-            doc["path"] = os.path.join(calibre_path, doc["path"])
-            doc["id"] = f"{PREFIX}_{str(doc['id'])}"
-        return documents
-
 def cleanup(documents):
     numFound = 100
     offset = 0
     rows = 100
     while offset < numFound:
-        res = solr.select({"fl": "id", "rows": rows, "start": offset})
-        solrDocs = res["response"]["docs"]
-        for solrDoc in solrDocs:
-            found = False
-            for doc in documents:
-                if doc["id"] == document["id"]:
-                    found = True
-                    break
-        numFound = res["response"]["numFound"]
-        offset += rows
+        try:
+            res = solr.select({"fl": "id", "rows": rows, "start": offset})
+            solrDocs = res["response"]["docs"]
+            for solrDoc in solrDocs:
+                found = False
+                for doc in documents:
+                    if doc["id"] == document["id"]:
+                        found = True
+                        break
+            numFound = res["response"]["numFound"]
+        except:
+            print(sys.exc_info())
+        finally:
+            offset += rows
 
 def indexer(doc):
     print(doc["title"])
@@ -141,37 +108,43 @@ def indexer(doc):
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
 
-    def getPages(html):
-        soup = BeautifulSoup(html, 'html.parser')
-        pages = [s.get_text() for s in soup.find_all("div", "page")]
-        return pages
-
     solrDoc = solr.select({"q":f"id:{doc['id']}", "fl": "md5"})
 
     md5 = ""
     if len(solrDoc["response"]["docs"]) > 0:
         md5 = solrDoc["response"]["docs"][0]["md5"]
-    fileExtension = doc["formats"][0].lower()
-    filename = doc["file"] + "." + fileExtension
-    doc["file"] = os.path.join(doc["path"], filename)
 
-    doc["md5"] = tomd5(doc["file"])
+    if "file" in doc:
+        filePath = doc["file"]
+    elif "link" in doc:
+        # download
+        pass
+    else: return
+
+    doc["md5"] = tomd5(filePath)
+    print(doc["md5"])
     if md5 != doc["md5"]:
         print("new Document")
-
-        extract = solr.extract(doc["file"])
-        meta = extract[f"{filename}_metadata"]
-        meta = dict(zip(meta[::2], meta[1::2]))
-
-        doc['language'] = meta['language'][0].lower() if "language" in meta else "de"
-        doc['language'] = doc['language'] if doc['language'] == "de" or doc['language'] == "en" else "other"
-        doc.update({f"p_{num}_page_txt_{doc['language']}": page for num, page in enumerate(getPages(extract[filename]), start=1)})
+        doc.update(extractData(filePath))
         doc[f"title_txt_{doc['language']}"] = doc["title"]
         doc[f"tags_txt_{doc['language']}"] = doc["tags"]
         doc.pop("tags", None)
         doc.pop("title", None)
-
         solr.commit(doc)
-
     else:
         print("no changes")
+
+def extractData(filePath):
+    def getPages(html):
+        soup = BeautifulSoup(html, 'html.parser')
+        pages = [s.get_text() for s in soup.find_all("div", "page")]
+        return pages
+    data = {}
+    extract = solr.extract(filePath)
+    filename = os.path.basename(filePath)
+    meta = extract[f"{filename}_metadata"]
+    meta = dict(zip(meta[::2], meta[1::2]))
+    data['language'] = meta['language'][0].lower() if "language" in meta else "de"
+    data['language'] = data['language'] if data['language'] == "de" or data['language'] == "en" else "other"
+    data.update({f"p_{num}_page_txt_{data['language']}": page for num, page in enumerate(getPages(extract[filename]), start=1)})
+    return data

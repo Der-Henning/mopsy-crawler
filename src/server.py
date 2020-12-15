@@ -4,7 +4,7 @@ import crawler
 import os
 
 server = flask.Flask(__name__)
-server.config["DEBUG"] = True
+server.config["DEBUG"] = True if os.getenv("DEBUG") == "true" else False
 PORT = os.getenv("PORT", 80)
 
 @server.route("/", methods=['GET'])
