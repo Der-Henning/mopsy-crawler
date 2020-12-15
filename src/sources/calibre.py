@@ -2,10 +2,10 @@ import sqlite3
 import os
 
 class Documents:
-    def __init__(self, prefix):
+    def __init__(self):
         self._documents = []
         self._index = 0
-        self._prefix = prefix
+        self._prefix = os.getenv("MOPSY_SOLR_PREFIX", "calibre")
         calibrePath = os.getenv("CALIBRE_PATH", "/mnt/books")
         self._documents = self._readCalibreDB(calibrePath)
 

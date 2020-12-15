@@ -11,11 +11,6 @@ services:
             CRAWLER_NAME: Calibre
             CRAWLER_TYPE: calibre
             CALIBRE_PATH: /mnt/books
-            MOPSY_MYSQL_DATABASE: mopsy
-            MOPSY_MYSQL_HOST: db
-            MOPSY_MYSQL_PORT: 3306
-            MOPSY_MYSQL_USERNAME: mopsy
-            MOPSY_MYSQL_PASSWORD: mopsy
             MOPSY_SOLR_HOST: server1
             MOPSY_SOLR_PORT: 1235
             MOPSY_SOLR_CORE: mopsy

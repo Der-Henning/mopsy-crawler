@@ -29,3 +29,6 @@ class Solr:
         url = self._buildURL("/suggest")
         res = requests.get(url, params=params)
         return res.json()
+
+    def remove(self, docID):
+        return self.commit({"delete": {"query": f"id:{docID}"}})

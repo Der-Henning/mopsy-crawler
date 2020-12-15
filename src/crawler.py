@@ -15,10 +15,11 @@ prozStartable = manager.Value(c_bool, True)
 
 CRAWLER_NAME = os.getenv("CRAWLER_NAME", "Calibre")
 CRAWLER = os.getenv("CRAWLER_TYPE", "calibre")
-PREFIX = os.getenv("MOPSY_SOLR_PREFIX", "calibre")
 SOLR_HOST = os.getenv("MOPSY_SOLR_HOST", "solr")
 SOLR_PORT = os.getenv("MOPSY_SOLR_PORT", 8983)
 SOLR_CORE = os.getenv("MOPSY_SOLR_CORE", "mopsy")
+PRE_CLEANUP = False if os.getenv("CRAWLER_PRE_CLEANUP") == "false" else True
+DIRECT_COMMIT = True if os.getenv("CRAWLER_DIRECT_COMMIT") == "true" else False
 
 sys.path.insert(0, f"./sources")
 Documents = __import__(CRAWLER).Documents
@@ -48,10 +49,11 @@ def getStatus():
 def worker(stopped, text, progress, status, startable):
     try:
         status.value = "Calibre Datenbank einlesen ..."
-        documents = Documents(PREFIX)
+        documents = Documents()
 
-        status.value = "Nicht mehr vorhandene Documente löschen ..."
-        cleanup(documents)
+        if PRE_CLEANUP:
+            status.value = "Nicht mehr vorhandene Documente löschen ..."
+            cleanup(documents)
 
         status.value = "Documente werden indiziert ..."
         for idx, doc in enumerate(documents):
@@ -60,7 +62,11 @@ def worker(stopped, text, progress, status, startable):
             try:
                 progress.value = round(idx / len(documents) * 100, 2)
                 text.value = doc["title"]
-                indexer(doc)
+                print(doc["title"])
+                if DIRECT_COMMIT:
+                    solr.commit(doc)
+                else:
+                    indexer(doc)
             except:
                 print(sys.exc_info())
         
@@ -92,6 +98,8 @@ def cleanup(documents):
                     if doc["id"] == document["id"]:
                         found = True
                         break
+                if not found:
+                    solr.remove(doc["id"])
             numFound = res["response"]["numFound"]
         except:
             print(sys.exc_info())
@@ -99,7 +107,7 @@ def cleanup(documents):
             offset += rows
 
 def indexer(doc):
-    print(doc["title"])
+
 
     def tomd5(fname):
         hash_md5 = hashlib.md5()
@@ -108,24 +116,36 @@ def indexer(doc):
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
 
+    def download(link):
+        filePath = './temp.pdf'
+        if os.path.exists(filePath): os.remove(filePath)
+        r = requests.get(link, allow_redirects=True)
+        open(filePath, 'wb').write(r.content)
+        return filePath
+
     solrDoc = solr.select({"q":f"id:{doc['id']}", "fl": "md5"})
 
     md5 = ""
     if len(solrDoc["response"]["docs"]) > 0:
         md5 = solrDoc["response"]["docs"][0]["md5"]
 
-    if "file" in doc:
+    if "indexlink" in doc:
+        filePath = download(doc["indexlink"])
+        doc.pop("indexlink", None)
+    elif "file" in doc:
         filePath = doc["file"]
     elif "link" in doc:
-        # download
-        pass
+        filePath = download(doc["link"])
     else: return
 
     doc["md5"] = tomd5(filePath)
     print(doc["md5"])
     if md5 != doc["md5"]:
         print("new Document")
-        doc.update(extractData(filePath))
+        extract = extractData(filePath)
+        doc.update(extract['pages'])
+        doc['language'] = extract['language']
+        if not "title" in doc: doc["title"] = extract["title"]
         doc[f"title_txt_{doc['language']}"] = doc["title"]
         doc[f"tags_txt_{doc['language']}"] = doc["tags"]
         doc.pop("tags", None)
@@ -144,7 +164,8 @@ def extractData(filePath):
     filename = os.path.basename(filePath)
     meta = extract[f"{filename}_metadata"]
     meta = dict(zip(meta[::2], meta[1::2]))
+    data['title'] = meta['dc:title'][0] if 'dc:title' in meta else filename
     data['language'] = meta['language'][0].lower() if "language" in meta else "de"
     data['language'] = data['language'] if data['language'] == "de" or data['language'] == "en" else "other"
-    data.update({f"p_{num}_page_txt_{data['language']}": page for num, page in enumerate(getPages(extract[filename]), start=1)})
+    data['pages'] = {f"p_{num}_page_txt_{data['language']}": page for num, page in enumerate(getPages(extract[filename]), start=1)}
     return data
