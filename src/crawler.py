@@ -162,10 +162,11 @@ def extractData(filePath):
     data = {}
     extract = solr.extract(filePath)
     filename = os.path.basename(filePath)
-    meta = extract[f"{filename}_metadata"]
+    content = extract["file"] if "file" in extract else extract[filename]
+    meta = extract["file_metadata"] if "file_metadata" in extract else extract[f"{filename}_metadata"]
     meta = dict(zip(meta[::2], meta[1::2]))
     data['title'] = meta['dc:title'][0] if 'dc:title' in meta else filename
     data['language'] = meta['language'][0].lower() if "language" in meta else "de"
     data['language'] = data['language'] if data['language'] == "de" or data['language'] == "en" else "other"
-    data['pages'] = {f"p_{num}_page_txt_{data['language']}": page for num, page in enumerate(getPages(extract[filename]), start=1)}
+    data['pages'] = {f"p_{num}_page_txt_{data['language']}": page for num, page in enumerate(content, start=1)}
     return data
