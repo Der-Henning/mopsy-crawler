@@ -168,5 +168,5 @@ def extractData(filePath):
     data['title'] = meta['dc:title'][0] if 'dc:title' in meta else filename
     data['language'] = meta['language'][0].lower() if "language" in meta else "de"
     data['language'] = data['language'] if data['language'] == "de" or data['language'] == "en" else "other"
-    data['pages'] = {f"p_{num}_page_txt_{data['language']}": page for num, page in enumerate(content, start=1)}
+    data['pages'] = {f"p_{num}_page_txt_{data['language']}": page for num, page in enumerate(getPages(content), start=1)}
     return data
