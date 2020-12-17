@@ -61,8 +61,9 @@ def worker(stopped, text, progress, status, startable):
                 break
             try:
                 progress.value = round(idx / len(documents) * 100, 2)
-                text.value = doc["title"]
-                print(doc["title"])
+                if "title" in doc:
+                    text.value = doc["title"]
+                    print(doc["title"])
                 if DIRECT_COMMIT:
                     solr.commit(doc)
                 else:
