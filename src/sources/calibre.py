@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import datetime
 
 class Documents:
     def __init__(self):
@@ -48,5 +49,8 @@ class Documents:
                         doc["tags"] = [t["name"] for t in cur.execute("SELECT name FROM books_tags_link LEFT JOIN tags ON tag=tags.id WHERE book={}".format(row["id"])).fetchall()]
                         ratings = [r["rating"] for r in cur.execute("SELECT ratings.rating FROM books_ratings_link LEFT JOIN ratings ON books_ratings_link.rating=ratings.id WHERE book={}".format(row["id"])).fetchall()]
                         doc["rating"] = ratings[0] if len(ratings) > 0 else 0
+                        doc["publicationDate"] = row["pubdate"]
+                        doc["scanDate"] = datetime.datetime.now().isoformat() + "Z"
+                        # doc["scanDate"] = datetime.datetime.combine(datetime.datetime.now(), time()).isoformat() + "Z"
                         documents.append(doc)
             return documents

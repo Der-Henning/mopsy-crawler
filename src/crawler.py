@@ -7,7 +7,7 @@ from solr import Solr
 from bs4 import BeautifulSoup
 
 manager = Manager()
-prozStatus = manager.Value(c_wchar_p, "")
+prozStatus = manager.Value(c_wchar_p, "untätig")
 prozProgress = manager.Value(c_double, 0.0)
 prozText = manager.Value(c_wchar_p, "")
 prozStop = manager.Value(c_bool, False)
@@ -21,7 +21,7 @@ SOLR_CORE = os.getenv("MOPSY_SOLR_CORE", "mopsy")
 PRE_CLEANUP = False if os.getenv("CRAWLER_PRE_CLEANUP") == "false" else True
 DIRECT_COMMIT = True if os.getenv("CRAWLER_DIRECT_COMMIT") == "true" else False
 
-sys.path.insert(0, f"./sources")
+sys.path.insert(0, "./sources")
 Documents = __import__(CRAWLER).Documents
 
 solr = Solr(SOLR_HOST, SOLR_PORT, SOLR_CORE)
@@ -75,6 +75,9 @@ def worker(stopped, text, progress, status, startable):
         text.value = ""
         solr.buildDict()
 
+        status.value = "Optimiere SOLR Index ..."
+        solr.optimize()
+
         if stopped.value:
             status.value = "abgebrochen"
         else:
@@ -108,8 +111,6 @@ def cleanup(documents):
             offset += rows
 
 def indexer(doc):
-
-
     def tomd5(fname):
         hash_md5 = hashlib.md5()
         with open(fname, "rb") as f:
@@ -149,6 +150,8 @@ def indexer(doc):
         if not "title" in doc: doc["title"] = extract["title"]
         doc[f"title_txt_{doc['language']}"] = doc["title"]
         doc[f"tags_txt_{doc['language']}"] = doc["tags"]
+        if "creationDate" in extract: doc["creationDate"] = extract["creationDate"]
+        if "modificationDate" in extract: doc["modificationDate"] = extract["modificationDate"]
         doc.pop("tags", None)
         doc.pop("title", None)
         solr.commit(doc)
@@ -170,4 +173,6 @@ def extractData(filePath):
     data['language'] = meta['language'][0].lower() if "language" in meta else "de"
     data['language'] = data['language'] if data['language'] == "de" or data['language'] == "en" else "other"
     data['pages'] = {f"p_{num}_page_txt_{data['language']}": page for num, page in enumerate(getPages(content), start=1)}
+    if "created" in meta: data['creationDate'] = meta['created'][0] 
+    if "Last-Modified" in meta: data['modificationDate'] = meta['Last-Modified'][0]
     return data

@@ -32,3 +32,9 @@ class Solr:
 
     def remove(self, docID):
         return self.commit({"delete": {"query": f"id:{docID}"}})
+
+    def optimize(self):
+        url = self._buildURL("/update")
+        params = {"optimize": "true"}
+        res = requests.get(url, params=params)
+        return res.json()
