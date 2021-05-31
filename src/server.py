@@ -19,6 +19,10 @@ def start():
 def stop():
    return jsonify(crawler.stop())
 
+@server.route("/toggleAutorestart", methods=["POST"])
+def toggleAutorestart():
+   return jsonify(crawler.toggleAutorestart())
+
 def startServer():
    server.run(host='0.0.0.0', port=PORT)
 

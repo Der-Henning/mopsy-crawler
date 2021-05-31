@@ -3,15 +3,9 @@ import sys
 from multiprocessing import Process, Value, Manager
 from ctypes import c_wchar_p, c_bool, c_double
 import hashlib
+import requests
 from solr import Solr
 from bs4 import BeautifulSoup
-
-manager = Manager()
-prozStatus = manager.Value(c_wchar_p, "untätig")
-prozProgress = manager.Value(c_double, 0.0)
-prozText = manager.Value(c_wchar_p, "")
-prozStop = manager.Value(c_bool, False)
-prozStartable = manager.Value(c_bool, True)
 
 CRAWLER_NAME = os.getenv("CRAWLER_NAME", "Calibre")
 CRAWLER = os.getenv("CRAWLER_TYPE", "calibre")
@@ -20,6 +14,16 @@ SOLR_PORT = os.getenv("MOPSY_SOLR_PORT", 8983)
 SOLR_CORE = os.getenv("MOPSY_SOLR_CORE", "mopsy")
 PRE_CLEANUP = False if os.getenv("CRAWLER_PRE_CLEANUP") == "false" else True
 DIRECT_COMMIT = True if os.getenv("CRAWLER_DIRECT_COMMIT") == "true" else False
+AUTORESTART = True if os.getenv("CRAWLER_AUTORESTART") == "true" else False
+AUTOSTART = False if os.getenv("CRAWLER_AUTOSTART") == "false" else True
+
+manager = Manager()
+prozStatus = manager.Value(c_wchar_p, "untätig")
+prozProgress = manager.Value(c_double, 0.0)
+prozText = manager.Value(c_wchar_p, "")
+prozStop = manager.Value(c_bool, False)
+prozStartable = manager.Value(c_bool, True)
+prozAutorestart = manager.Value(c_bool, AUTORESTART)
 
 sys.path.insert(0, "./sources")
 Documents = __import__(CRAWLER).Documents
@@ -33,7 +37,7 @@ def start():
         prozText.value = ""
         prozStop.value = False
         prozStartable.value = False
-        task = Process(target=worker, args=(prozStop, prozText, prozProgress, prozStatus, prozStartable))
+        task = Process(target=worker, args=(prozStop, prozText, prozProgress, prozStatus, prozStartable, prozAutorestart))
         task.start()
     return getStatus()
 
@@ -43,10 +47,21 @@ def stop():
         prozStatus.value = "wird gestopped ..."
     return getStatus()
 
-def getStatus():
-    return {"name": CRAWLER_NAME, "status": prozStatus.value, "progress": prozProgress.value, "text": prozText.value, "startable": prozStartable.value}
+def toggleAutorestart():
+    prozAutorestart.value = False if prozAutorestart.value else True
+    return getStatus()
 
-def worker(stopped, text, progress, status, startable):
+def getStatus():
+    return {
+        "name": CRAWLER_NAME,
+        "status": prozStatus.value,
+        "progress": prozProgress.value,
+        "text": prozText.value,
+        "startable": prozStartable.value,
+        "autorestart": prozAutorestart.value
+    }
+
+def worker(stopped, text, progress, status, startable, autorestart):
     try:
         status.value = "Calibre Datenbank einlesen ..."
         documents = Documents()
@@ -87,6 +102,8 @@ def worker(stopped, text, progress, status, startable):
         print(sys.exc_info())
     finally:
         startable.value = True
+        if autorestart.value and not stopped.value:
+            start()
 
 def cleanup(documents):
     numFound = 100
@@ -99,7 +116,7 @@ def cleanup(documents):
             for solrDoc in solrDocs:
                 found = False
                 for doc in documents:
-                    if doc["id"] == document["id"]:
+                    if doc["id"] == solrDoc["id"]:
                         found = True
                         break
                 if not found:
@@ -176,3 +193,10 @@ def extractData(filePath):
     if "created" in meta: data['creationDate'] = meta['created'][0] 
     if "Last-Modified" in meta: data['modificationDate'] = meta['Last-Modified'][0]
     return data
+
+def main():
+    if AUTOSTART:
+        start()
+
+if __name__ == "__main__":
+    main()
