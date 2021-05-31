@@ -55,7 +55,7 @@ def worker(stopped, text, progress, status, startable):
             status.value = "Nicht mehr vorhandene Documente löschen ..."
             cleanup(documents)
 
-        status.value = "Documente werden indiziert ..."
+        status.value = "Dokumente werden indiziert ..."
         for idx, doc in enumerate(documents):
             if stopped.value:
                 break

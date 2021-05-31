@@ -51,6 +51,5 @@ class Documents:
                         doc["rating"] = ratings[0] if len(ratings) > 0 else 0
                         doc["publicationDate"] = row["pubdate"]
                         doc["scanDate"] = datetime.datetime.now().isoformat() + "Z"
-                        # doc["scanDate"] = datetime.datetime.combine(datetime.datetime.now(), time()).isoformat() + "Z"
                         documents.append(doc)
             return documents
