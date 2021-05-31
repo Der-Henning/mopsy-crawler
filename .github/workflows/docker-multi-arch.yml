@@ -18,7 +18,7 @@ jobs:
         -
             name: Set Release Tag
             run: |
-                if [ "${GITHUB_REF#refs/*/}" = "master" ]; \
+                if [ "${GITHUB_REF#refs/*/}" = "main" ]; \
                 then echo "RELEASE_TAG=latest"; \
                 else echo "RELEASE_TAG=${GITHUB_REF#refs/*/}"; fi \
                 >> $GITHUB_ENV
