@@ -165,8 +165,8 @@ def indexer(doc):
         doc.update(extract['pages'])
         doc['language'] = extract['language']
         if not "title" in doc: doc["title"] = extract["title"]
-        doc[f"title_txt_{doc['language']}"] = doc["title"]
-        doc[f"tags_txt_{doc['language']}"] = doc["tags"]
+        if "title" in doc: doc[f"title_txt_{doc['language']}"] = doc["title"]
+        if "tags" in doc: doc[f"tags_txt_{doc['language']}"] = doc["tags"]
         if "creationDate" in extract: doc["creationDate"] = extract["creationDate"]
         if "modificationDate" in extract: doc["modificationDate"] = extract["modificationDate"]
         doc.pop("tags", None)
