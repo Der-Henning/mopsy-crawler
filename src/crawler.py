@@ -163,7 +163,7 @@ def indexer(doc):
         print("new Document")
         extract = extractData(filePath)
         doc.update(extract['pages'])
-        doc['language'] = extract['language']
+        if not "language" in doc: doc['language'] = extract['language']
         if not "title" in doc: doc["title"] = extract["title"]
         if "title" in doc: doc[f"title_txt_{doc['language']}"] = doc["title"]
         if "tags" in doc: doc[f"tags_txt_{doc['language']}"] = doc["tags"]
