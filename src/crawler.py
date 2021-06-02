@@ -161,7 +161,7 @@ def indexer(doc):
     print(doc["md5"])
     if md5 != doc["md5"]:
         print("new Document")
-        extract = extractData(filePath)
+        extract = extractData(filePath, doc)
         doc.update(extract['pages'])
         if not "language" in doc: doc['language'] = extract['language']
         if not "title" in doc: doc["title"] = extract["title"]
@@ -175,7 +175,7 @@ def indexer(doc):
     else:
         print("no changes")
 
-def extractData(filePath):
+def extractData(filePath, doc):
     def getPages(html):
         soup = BeautifulSoup(html, 'html.parser')
         pages = [s.get_text() for s in soup.find_all("div", "page")]
@@ -187,8 +187,11 @@ def extractData(filePath):
     meta = extract["file_metadata"] if "file_metadata" in extract else extract[f"{filename}_metadata"]
     meta = dict(zip(meta[::2], meta[1::2]))
     data['title'] = meta['dc:title'][0] if 'dc:title' in meta else filename
-    data['language'] = meta['language'][0].lower() if "language" in meta else "de"
-    data['language'] = data['language'] if data['language'] == "de" or data['language'] == "en" else "other"
+    if "language" in doc:
+        data['language'] = doc['language']
+    else:
+        data['language'] = meta['language'][0].lower() if "language" in meta else "de"
+        data['language'] = data['language'] if data['language'] == "de" or data['language'] == "en" else "other"
     data['pages'] = {f"p_{num}_page_txt_{data['language']}": page for num, page in enumerate(getPages(content), start=1)}
     if "created" in meta: data['creationDate'] = meta['created'][0] 
     if "Last-Modified" in meta: data['modificationDate'] = meta['Last-Modified'][0]
