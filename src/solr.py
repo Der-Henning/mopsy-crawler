@@ -38,3 +38,9 @@ class Solr:
         params = {"optimize": "true"}
         res = requests.get(url, params=params)
         return res.json()
+
+    def addLanguage(self, lang):
+        url = self._buildURL("/schema/dynamicfields")
+        res = requests.get(url)
+        langIsSupported = any(x.name == f"*_txt_{lang}" for x in res.dynamicFields)
+        return langIsSupported

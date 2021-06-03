@@ -30,6 +30,13 @@ Documents = __import__(CRAWLER).Documents
 
 solr = Solr(SOLR_HOST, SOLR_PORT, SOLR_CORE)
 
+print(solr.select({"q": "*:*"}))
+print(solr.addLanguage("en"))
+print(solr.addLanguage("jj"))
+print(solr.addLanguage("other"))
+print(solr.addLanguage("de"))
+print(solr.addLanguage("tzu"))
+
 def start():
     if prozStartable.value:
         prozProgress.value = 0
