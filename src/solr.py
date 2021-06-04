@@ -39,8 +39,23 @@ class Solr:
         res = requests.get(url, params=params)
         return res.json()
 
-    def addLanguage(self, lang):
-        url = self._buildURL("/schema/dynamicfields")
-        res = requests.get(url)
-        langIsSupported = any(x.name == f"*_txt_{lang}" for x in res.dynamicFields)
+    def isLangSupported(self, lang):
+        url = self._buildURL("/schema/fields")
+        res = requests.get(url).json()
+        langIsSupported = any(x["name"] == f"content_txt_{lang}" for x in res["fields"])
         return langIsSupported
+
+    def buildSchema(self, langs):
+        url = self._buildURL("/schema")
+        for lang in langs:
+            type = "text_general" if lang=="other" else f"text_{lang}"
+            data = {
+                "add-field": {"name": "spellShingle", "type": "textSpellShingle", "multiValued": True, "indexed": True, "stored": True },
+                "add-field": {"name": f"content_txt_{lang}", "type": type, "multiValued": True, "indexed": True, "stored": True },
+                "add-field": {"name": f"tags_txt_{lang}", "type": type, "multiValued": True, "indexed": True, "stored": True },
+                "add-dynamic-field": {"name": f"*_page_txt_{lang}", "type": type, "multiValued": False, "indexed": True, "stored": True },
+                "add-copy-field": {"source": f"*_page_txt_{lang}", "dest": f"content_txt_{lang}" },
+                "add-copy-field": {"source": f"*_txt_{lang}", "dest": "spellShingle" }
+            }
+            requests.post(url, json=data)
+        

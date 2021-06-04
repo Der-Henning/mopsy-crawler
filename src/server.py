@@ -23,6 +23,10 @@ def stop():
 def toggleAutorestart():
    return jsonify(crawler.toggleAutorestart())
 
+@server.route("/fieldList", methods=["GET"])
+def fieldList():
+   return jsonify(crawler.Documents.fieldList)
+
 def startServer():
    server.run(host='0.0.0.0', port=PORT)
 

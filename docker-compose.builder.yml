@@ -1,4 +1,4 @@
-version: '3'
+version: '2'
 services:
     crawler:
         build: .
@@ -15,3 +15,7 @@ services:
             MOPSY_SOLR_PORT: 1235
             MOPSY_SOLR_CORE: mopsy
             MOPSY_SOLR_PREFIX: calibre
+    schema:
+        extends:
+            service: crawler
+        command: python buildSchema.py

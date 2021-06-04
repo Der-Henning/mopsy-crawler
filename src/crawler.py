@@ -4,18 +4,9 @@ from multiprocessing import Process, Value, Manager
 from ctypes import c_wchar_p, c_bool, c_double
 import hashlib
 import requests
+import config
 from solr import Solr
 from bs4 import BeautifulSoup
-
-CRAWLER_NAME = os.getenv("CRAWLER_NAME", "Calibre")
-CRAWLER = os.getenv("CRAWLER_TYPE", "calibre")
-SOLR_HOST = os.getenv("MOPSY_SOLR_HOST", "solr")
-SOLR_PORT = os.getenv("MOPSY_SOLR_PORT", 8983)
-SOLR_CORE = os.getenv("MOPSY_SOLR_CORE", "mopsy")
-PRE_CLEANUP = False if os.getenv("CRAWLER_PRE_CLEANUP") == "false" else True
-DIRECT_COMMIT = True if os.getenv("CRAWLER_DIRECT_COMMIT") == "true" else False
-AUTORESTART = True if os.getenv("CRAWLER_AUTORESTART") == "true" else False
-AUTOSTART = False if os.getenv("CRAWLER_AUTOSTART") == "false" else True
 
 manager = Manager()
 prozStatus = manager.Value(c_wchar_p, "untätig")
@@ -23,19 +14,12 @@ prozProgress = manager.Value(c_double, 0.0)
 prozText = manager.Value(c_wchar_p, "")
 prozStop = manager.Value(c_bool, False)
 prozStartable = manager.Value(c_bool, True)
-prozAutorestart = manager.Value(c_bool, AUTORESTART)
+prozAutorestart = manager.Value(c_bool, config.AUTORESTART)
 
 sys.path.insert(0, "./sources")
-Documents = __import__(CRAWLER).Documents
+Documents = __import__(config.CRAWLER).Documents
 
-solr = Solr(SOLR_HOST, SOLR_PORT, SOLR_CORE)
-
-print(solr.select({"q": "*:*"}))
-print(solr.addLanguage("en"))
-print(solr.addLanguage("jj"))
-print(solr.addLanguage("other"))
-print(solr.addLanguage("de"))
-print(solr.addLanguage("tzu"))
+solr = Solr(config.SOLR_HOST, config.SOLR_PORT, config.SOLR_CORE)
 
 def start():
     if prozStartable.value:
@@ -60,7 +44,7 @@ def toggleAutorestart():
 
 def getStatus():
     return {
-        "name": CRAWLER_NAME,
+        "name": config.CRAWLER_NAME,
         "status": prozStatus.value,
         "progress": prozProgress.value,
         "text": prozText.value,
@@ -73,7 +57,7 @@ def worker(stopped, text, progress, status, startable, autorestart):
         status.value = "Calibre Datenbank einlesen ..."
         documents = Documents()
 
-        if PRE_CLEANUP:
+        if config.PRE_CLEANUP:
             status.value = "Nicht mehr vorhandene Documente löschen ..."
             cleanup(documents)
 
@@ -86,7 +70,7 @@ def worker(stopped, text, progress, status, startable, autorestart):
                 if "title" in doc:
                     text.value = doc["title"]
                     print(doc["title"])
-                if DIRECT_COMMIT:
+                if config.DIRECT_COMMIT:
                     solr.commit(doc)
                 else:
                     indexer(doc)
@@ -142,26 +126,29 @@ def indexer(doc):
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
 
-    def download(link):
-        filePath = './temp.pdf'
-        if os.path.exists(filePath): os.remove(filePath)
+    def download(link, filePath):
+        # if os.path.exists(filePath): os.remove(filePath)
         r = requests.get(link, allow_redirects=True)
         open(filePath, 'wb').write(r.content)
         return filePath
 
     solrDoc = solr.select({"q":f"id:{doc['id']}", "fl": "md5"})
 
+    filePath = f"/mnt/data/{config.SOLR_PREFIX}/{doc['id']}.pdf"
+
     md5 = ""
     if len(solrDoc["response"]["docs"]) > 0:
         md5 = solrDoc["response"]["docs"][0]["md5"]
 
     if "indexlink" in doc:
-        filePath = download(doc["indexlink"])
+        download(doc["indexlink"], filePath)
         doc.pop("indexlink", None)
+        doc['file'] = filePath
     elif "file" in doc:
         filePath = doc["file"]
     elif "link" in doc:
-        filePath = download(doc["link"])
+        download(doc["link"], filePath)
+        doc['file'] = filePath
     else: return
 
     doc["md5"] = tomd5(filePath)
@@ -205,7 +192,7 @@ def extractData(filePath, doc):
     return data
 
 def main():
-    if AUTOSTART:
+    if config.AUTOSTART:
         start()
 
 if __name__ == "__main__":

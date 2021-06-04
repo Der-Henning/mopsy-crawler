@@ -1,14 +1,20 @@
 import sqlite3
 import os
 import datetime
+import config
 
 class Documents:
     def __init__(self):
         self._documents = []
         self._index = 0
-        self._prefix = os.getenv("MOPSY_SOLR_PREFIX", "calibre")
+        self._prefix = config.SOLR_PREFIX
         calibrePath = os.getenv("CALIBRE_PATH", "/mnt/books")
         self._documents = self._readCalibreDB(calibrePath)
+
+    # define individual facets for this crawler
+    fieldList = {
+            "facets": {}
+        }
 
     def __iter__(self):
         return self
