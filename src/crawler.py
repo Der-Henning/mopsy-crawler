@@ -134,7 +134,11 @@ def indexer(doc):
 
     solrDoc = solr.select({"q":f"id:{doc['id']}", "fl": "md5"})
 
-    filePath = f"/mnt/data/{config.SOLR_PREFIX}/{doc['id']}.pdf"
+    cacheFolder = f"/mnt/data/{config.SOLR_PREFIX}"
+    if not os.path.exists(cacheFolder):
+        os.makedirs(cacheFolder)
+
+    filePath = f"{cacheFolder}/{doc['id']}.pdf"
 
     md5 = ""
     if len(solrDoc["response"]["docs"]) > 0:
