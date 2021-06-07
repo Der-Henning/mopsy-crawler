@@ -147,7 +147,7 @@ class Crawler:
         elif "file" in doc:
             filePath = doc["file"]
         elif "link" in doc:
-            filePath = self.fileCache.download(doc["indexlink"], doc["id"])
+            filePath = self.fileCache.download(doc["link"], doc["id"])
             doc['file'] = filePath
         else: return
 
