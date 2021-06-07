@@ -31,7 +31,9 @@ class Solr:
         return res.json()
 
     def remove(self, docID):
-        return self.commit({"delete": {"query": f"id:{docID}"}})
+        url = self._buildURL("/update")
+        res = requests.post(url, json={"commit": {}, "delete": {"id": docID}})
+        return res.json()
 
     def optimize(self):
         url = self._buildURL("/update")
@@ -44,18 +46,4 @@ class Solr:
         res = requests.get(url).json()
         langIsSupported = any(x["name"] == f"content_txt_{lang}" for x in res["fields"])
         return langIsSupported
-
-    def buildSchema(self, langs):
-        url = self._buildURL("/schema")
-        for lang in langs:
-            type = "text_general" if lang=="other" else f"text_{lang}"
-            data = {
-                "add-field": {"name": "spellShingle", "type": "textSpellShingle", "multiValued": True, "indexed": True, "stored": True },
-                "add-field": {"name": f"content_txt_{lang}", "type": type, "multiValued": True, "indexed": True, "stored": True },
-                "add-field": {"name": f"tags_txt_{lang}", "type": type, "multiValued": True, "indexed": True, "stored": True },
-                "add-dynamic-field": {"name": f"*_page_txt_{lang}", "type": type, "multiValued": False, "indexed": True, "stored": True },
-                "add-copy-field": {"source": f"*_page_txt_{lang}", "dest": f"content_txt_{lang}" },
-                "add-copy-field": {"source": f"*_txt_{lang}", "dest": "spellShingle" }
-            }
-            requests.post(url, json=data)
         

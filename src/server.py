@@ -1,11 +1,13 @@
 import flask
 from flask import request, jsonify
-import crawler
+from crawler import Crawler
 import os
 
 server = flask.Flask(__name__)
 server.config["DEBUG"] = True if os.getenv("DEBUG") == "true" else False
 PORT = os.getenv("PORT", 80)
+
+crawler = Crawler()
 
 @server.route("/", methods=['GET'])
 def status():

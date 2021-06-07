@@ -3,201 +3,190 @@ import sys
 from multiprocessing import Process, Value, Manager
 from ctypes import c_wchar_p, c_bool, c_double
 import hashlib
-import requests
 import config
 from solr import Solr
 from bs4 import BeautifulSoup
+from fileCache import FileCache
 
-manager = Manager()
-prozStatus = manager.Value(c_wchar_p, "untätig")
-prozProgress = manager.Value(c_double, 0.0)
-prozText = manager.Value(c_wchar_p, "")
-prozStop = manager.Value(c_bool, False)
-prozStartable = manager.Value(c_bool, True)
-prozAutorestart = manager.Value(c_bool, config.AUTORESTART)
+class Crawler:
+    def __init__(self):
+        manager = Manager()
+        self.prozStatus = manager.Value(c_wchar_p, "untätig")
+        self.prozProgress = manager.Value(c_double, 0.0)
+        self.prozText = manager.Value(c_wchar_p, "")
+        self.prozStop = manager.Value(c_bool, False)
+        self.prozStartable = manager.Value(c_bool, True)
+        self.prozAutorestart = manager.Value(c_bool, config.AUTORESTART)
+        self.task = None
+        self.fileCache = FileCache()
+        self.indexedIDs = []
 
-sys.path.insert(0, "./sources")
-Documents = __import__(config.CRAWLER).Documents
+        sys.path.insert(0, "./sources")
+        self.Documents = __import__(config.CRAWLER).Documents
 
-solr = Solr(config.SOLR_HOST, config.SOLR_PORT, config.SOLR_CORE)
+        self.solr = Solr(config.SOLR_HOST, config.SOLR_PORT, config.SOLR_CORE)
 
-def start():
-    if prozStartable.value:
-        prozProgress.value = 0
-        prozStatus.value = "wird gestartet ..."
-        prozText.value = ""
-        prozStop.value = False
-        prozStartable.value = False
-        task = Process(target=worker, args=(prozStop, prozText, prozProgress, prozStatus, prozStartable, prozAutorestart))
-        task.start()
-    return getStatus()
+    def start(self):
+        if self.prozStartable.value:
+            self.indexedIDs = []
+            self.prozProgress.value = 0
+            self.prozStatus.value = "wird gestartet ..."
+            self.prozText.value = ""
+            self.prozStop.value = False
+            self.prozStartable.value = False
+            self.task = Process(target=self.worker, args=(self.prozStop, self.prozText, self.prozProgress, self.prozStatus, self.prozStartable, self.prozAutorestart))
+            self.task.start()
+        return self.getStatus()
 
-def stop():
-    if not prozStartable.value:
-        prozStop.value = True
-        prozStatus.value = "wird gestopped ..."
-    return getStatus()
+    def stop(self):
+        if not self.prozStartable.value:
+            self.prozStop.value = True
+            self.prozStatus.value = "wird gestopped ..."
+        return self.getStatus()
 
-def toggleAutorestart():
-    prozAutorestart.value = False if prozAutorestart.value else True
-    return getStatus()
+    def toggleAutorestart(self):
+        self.prozAutorestart.value = False if self.prozAutorestart.value else True
+        return self.getStatus()
 
-def getStatus():
-    return {
-        "name": config.CRAWLER_NAME,
-        "status": prozStatus.value,
-        "progress": prozProgress.value,
-        "text": prozText.value,
-        "startable": prozStartable.value,
-        "autorestart": prozAutorestart.value
-    }
+    def getStatus(self):
+        return {
+            "name": config.CRAWLER_NAME,
+            "status": self.prozStatus.value,
+            "progress": self.prozProgress.value,
+            "text": self.prozText.value,
+            "startable": self.prozStartable.value,
+            "autorestart": self.prozAutorestart.value
+        }
 
-def worker(stopped, text, progress, status, startable, autorestart):
-    try:
-        status.value = "Calibre Datenbank einlesen ..."
-        documents = Documents()
-
-        if config.PRE_CLEANUP:
-            status.value = "Nicht mehr vorhandene Documente löschen ..."
-            cleanup(documents)
-
-        status.value = "Dokumente werden indiziert ..."
-        for idx, doc in enumerate(documents):
-            if stopped.value:
-                break
-            try:
-                progress.value = round(idx / len(documents) * 100, 2)
-                if "title" in doc:
-                    text.value = doc["title"]
-                    print(doc["title"])
-                if config.DIRECT_COMMIT:
-                    solr.commit(doc)
-                else:
-                    indexer(doc)
-            except:
-                print(sys.exc_info())
-        
-        status.value = "Erzeuge Index für Suchvorschläge ..."
-        text.value = ""
-        solr.buildDict()
-
-        status.value = "Optimiere SOLR Index ..."
-        solr.optimize()
-
-        if stopped.value:
-            status.value = "abgebrochen"
-        else:
-            status.value = "fertig"
-    except:
-        status.value = "fehler: {}".format(sys.exc_info())
-        print(sys.exc_info())
-    finally:
-        startable.value = True
-        if autorestart.value and not stopped.value:
-            start()
-
-def cleanup(documents):
-    numFound = 100
-    offset = 0
-    rows = 100
-    while offset < numFound:
+    def worker(self, stopped, text, progress, status, startable, autorestart):
         try:
-            res = solr.select({"fl": "id", "rows": rows, "start": offset})
-            solrDocs = res["response"]["docs"]
-            for solrDoc in solrDocs:
-                found = False
-                for doc in documents:
-                    if doc["id"] == solrDoc["id"]:
-                        found = True
-                        break
-                if not found:
-                    solr.remove(doc["id"])
-            numFound = res["response"]["numFound"]
+            # print(config.PRE_CLEANUP)
+            # if config.PRE_CLEANUP:
+            #     print("starting cleaning")
+            #     status.value = "Nicht mehr vorhandene Documente löschen ..."
+            #     self.cleanup(self.Documents())
+
+            status.value = "Calibre Datenbank einlesen ..."
+            documents = self.Documents()
+            status.value = "Dokumente werden indiziert ..."
+            for idx, doc in enumerate(documents):
+                if stopped.value:
+                    break
+                try:
+                    progress.value = round(idx / len(documents) * 100, 2)
+                    if "title" in doc:
+                        text.value = doc["title"]
+                        print(doc["title"])
+                    if config.DIRECT_COMMIT:
+                        self.solr.commit(doc)
+                    else:
+                        self.indexer(doc)
+                    self.indexedIDs.append(doc["id"])
+                except:
+                    print(sys.exc_info())
+            
+            status.value = "Lösche nicht mehr vorhandene Einträge ..."
+            self.cleanup()
+
+            status.value = "Erzeuge Index für Suchvorschläge ..."
+            text.value = ""
+            self.solr.buildDict()
+
+            status.value = "Optimiere SOLR Index ..."
+            self.solr.optimize()
+
+            if stopped.value:
+                status.value = "abgebrochen"
+            else:
+                status.value = "fertig"
         except:
+            status.value = "fehler: {}".format(sys.exc_info())
             print(sys.exc_info())
         finally:
-            offset += rows
+            startable.value = True
+            if autorestart.value and not stopped.value:
+                self.start()
 
-def indexer(doc):
-    def tomd5(fname):
-        hash_md5 = hashlib.md5()
-        with open(fname, "rb") as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                hash_md5.update(chunk)
-        return hash_md5.hexdigest()
+    def cleanup(self):
+        numFound = 100
+        offset = 0
+        rows = 100
+        while offset < numFound:
+            try:
+                res = self.solr.select({"q": "*:*", "fl": "id", "rows": rows, "start": offset})
+                solrDocs = res["response"]["docs"]
+                for solrDoc in solrDocs:
+                    if not solrDoc["id"] in self.indexedIDs:
+                        print(f"Deleting {solrDoc['id']} from index")
+                        self.solr.remove(solrDoc["id"])
+                        self.fileCache.remove(solrDoc["id"])
+                numFound = res["response"]["numFound"]
+            except:
+                print(sys.exc_info())
+            finally:
+                offset += rows
 
-    def download(link, filePath):
-        # if os.path.exists(filePath): os.remove(filePath)
-        r = requests.get(link, allow_redirects=True)
-        open(filePath, 'wb').write(r.content)
-        return filePath
+    def indexer(self, doc):
+        def tomd5(fname):
+            hash_md5 = hashlib.md5()
+            with open(fname, "rb") as f:
+                for chunk in iter(lambda: f.read(4096), b""):
+                    hash_md5.update(chunk)
+            return hash_md5.hexdigest()
 
-    solrDoc = solr.select({"q":f"id:{doc['id']}", "fl": "md5"})
+        solrDoc = self.solr.select({"q":f"id:{doc['id']}", "fl": "md5"})
 
-    cacheFolder = f"/mnt/data/{config.SOLR_PREFIX}"
-    if not os.path.exists(cacheFolder):
-        os.makedirs(cacheFolder)
+        md5 = ""
+        if len(solrDoc["response"]["docs"]) > 0:
+            md5 = solrDoc["response"]["docs"][0]["md5"]
 
-    filePath = f"{cacheFolder}/{doc['id']}.pdf"
+        if "indexlink" in doc:
+            filePath = self.fileCache.download(doc["indexlink"], doc["id"])
+            doc.pop("indexlink", None)
+            doc['file'] = filePath
+        elif "file" in doc:
+            filePath = doc["file"]
+        elif "link" in doc:
+            filePath = self.fileCache.download(doc["indexlink"], doc["id"])
+            doc['file'] = filePath
+        else: return
 
-    md5 = ""
-    if len(solrDoc["response"]["docs"]) > 0:
-        md5 = solrDoc["response"]["docs"][0]["md5"]
+        doc["md5"] = tomd5(filePath)
+        print(doc["md5"])
+        if md5 != doc["md5"]:
+            print("new Document")
+            extract = self.extractData(filePath, doc)
+            doc.update(extract['pages'])
+            if not "language" in doc: doc['language'] = extract['language']
+            if not "title" in doc: doc["title"] = extract["title"]
+            if "title" in doc: doc[f"title_txt_{doc['language']}"] = doc["title"]
+            if "tags" in doc: doc[f"tags_txt_{doc['language']}"] = doc["tags"]
+            if "creationDate" in extract: doc["creationDate"] = extract["creationDate"]
+            if "modificationDate" in extract: doc["modificationDate"] = extract["modificationDate"]
+            doc.pop("tags", None)
+            doc.pop("title", None)
+            self.solr.commit(doc)
+        else:
+            print("no changes")
 
-    if "indexlink" in doc:
-        download(doc["indexlink"], filePath)
-        doc.pop("indexlink", None)
-        doc['file'] = filePath
-    elif "file" in doc:
-        filePath = doc["file"]
-    elif "link" in doc:
-        download(doc["link"], filePath)
-        doc['file'] = filePath
-    else: return
-
-    doc["md5"] = tomd5(filePath)
-    print(doc["md5"])
-    if md5 != doc["md5"]:
-        print("new Document")
-        extract = extractData(filePath, doc)
-        doc.update(extract['pages'])
-        if not "language" in doc: doc['language'] = extract['language']
-        if not "title" in doc: doc["title"] = extract["title"]
-        if "title" in doc: doc[f"title_txt_{doc['language']}"] = doc["title"]
-        if "tags" in doc: doc[f"tags_txt_{doc['language']}"] = doc["tags"]
-        if "creationDate" in extract: doc["creationDate"] = extract["creationDate"]
-        if "modificationDate" in extract: doc["modificationDate"] = extract["modificationDate"]
-        doc.pop("tags", None)
-        doc.pop("title", None)
-        solr.commit(doc)
-    else:
-        print("no changes")
-
-def extractData(filePath, doc):
-    def getPages(html):
-        soup = BeautifulSoup(html, 'html.parser')
-        pages = [s.get_text() for s in soup.find_all("div", "page")]
-        return pages
-    data = {}
-    extract = solr.extract(filePath)
-    filename = os.path.basename(filePath)
-    content = extract["file"] if "file" in extract else extract[filename]
-    meta = extract["file_metadata"] if "file_metadata" in extract else extract[f"{filename}_metadata"]
-    meta = dict(zip(meta[::2], meta[1::2]))
-    data['title'] = meta['dc:title'][0] if 'dc:title' in meta else filename
-    if "language" in doc:
-        data['language'] = doc['language']
-    else:
-        data['language'] = meta['language'][0].lower() if "language" in meta else "de"
-        data['language'] = data['language'] if data['language'] == "de" or data['language'] == "en" else "other"
-    data['pages'] = {f"p_{num}_page_txt_{data['language']}": page for num, page in enumerate(getPages(content), start=1)}
-    if "created" in meta: data['creationDate'] = meta['created'][0] 
-    if "Last-Modified" in meta: data['modificationDate'] = meta['Last-Modified'][0]
-    return data
-
-def main():
-    if config.AUTOSTART:
-        start()
-
-if __name__ == "__main__":
-    main()
+    def extractData(self, filePath, doc):
+        def getPages(html):
+            soup = BeautifulSoup(html, 'html.parser')
+            pages = [s.get_text() for s in soup.find_all("div", "page")]
+            return pages
+        data = {}
+        extract = self.solr.extract(filePath)
+        filename = os.path.basename(filePath)
+        content = extract["file"] if "file" in extract else extract[filename]
+        meta = extract["file_metadata"] if "file_metadata" in extract else extract[f"{filename}_metadata"]
+        meta = dict(zip(meta[::2], meta[1::2]))
+        data['title'] = meta['dc:title'][0] if 'dc:title' in meta else filename
+        if "language" in doc:
+            data['language'] = doc['language']
+        else:
+            data['language'] = meta['language'][0].lower() if "language" in meta else "de"
+            data['language'] = data['language'] if data['language'] == "de" or data['language'] == "en" else "other"
+        data['pages'] = {f"p_{num}_page_txt_{data['language']}": page for num, page in enumerate(getPages(content), start=1)}
+        if "created" in meta: data['creationDate'] = meta['created'][0] 
+        if "Last-Modified" in meta: data['modificationDate'] = meta['Last-Modified'][0]
+        return data

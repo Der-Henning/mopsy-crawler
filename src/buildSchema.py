@@ -1,10 +1,4 @@
-import config
-# from solr import Solr
-
 langs = ["other", "en", "de", "ar", "bg", "ca", "cjk", "cz", "da", "el", "es", "et", "eu", "fa", "fi", "fr", "ga", "gl", "hi", "hu", "hy", "id", "it", "ja", "ko", "lv", "nl", "no", "pt", "ro", "ru", "sv", "th", "tr"]
-# solr = Solr(config.SOLR_HOST, config.SOLR_PORT, config.SOLR_CORE)
-
-# solr.buildSchema(langs)
 
 for lang in langs:
     type = "general" if lang == "other" else lang
