@@ -4,6 +4,7 @@ from multiprocessing import Process, Value, Manager
 from ctypes import c_wchar_p, c_bool, c_double
 import hashlib
 import config
+import time
 from solr import Solr
 from bs4 import BeautifulSoup
 from fileCache import FileCache
@@ -84,7 +85,10 @@ class Crawler:
                     self.indexedIDs.append(doc["id"])
                 except:
                     print(sys.exc_info())
+                finally:
+                    time.sleep(config.SLEEP_TIME)
             
+            progress.value = 100
             status.value = "Lösche nicht mehr vorhandene Einträge ..."
             self.cleanup()
 
