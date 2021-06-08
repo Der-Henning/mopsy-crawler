@@ -5,6 +5,7 @@ from ctypes import c_wchar_p, c_bool, c_double
 import hashlib
 import config
 import time
+import datetime
 from solr import Solr
 from bs4 import BeautifulSoup
 from fileCache import FileCache
@@ -175,6 +176,7 @@ class Crawler:
             if "tags" in doc: doc[f"tags_txt_{doc['language']}"] = doc["tags"]
             if "creationDate" in extract: doc["creationDate"] = extract["creationDate"]
             if "modificationDate" in extract: doc["modificationDate"] = extract["modificationDate"]
+            doc["scanDate"] = datetime.datetime.now().isoformat() + "Z"
             doc.pop("tags", None)
             doc.pop("title", None)
             self.solr.commit(doc)

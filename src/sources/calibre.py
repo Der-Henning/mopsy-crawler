@@ -1,6 +1,5 @@
 import sqlite3
 import os
-import datetime
 import config
 
 class Documents:
@@ -56,6 +55,5 @@ class Documents:
                         ratings = [r["rating"] for r in cur.execute("SELECT ratings.rating FROM books_ratings_link LEFT JOIN ratings ON books_ratings_link.rating=ratings.id WHERE book={}".format(row["id"])).fetchall()]
                         doc["rating"] = ratings[0] if len(ratings) > 0 else 0
                         doc["publicationDate"] = row["pubdate"]
-                        doc["scanDate"] = datetime.datetime.now().isoformat() + "Z"
                         documents.append(doc)
             return documents
