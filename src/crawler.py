@@ -88,9 +88,10 @@ class Crawler:
                 finally:
                     time.sleep(config.SLEEP_TIME)
             
-            progress.value = 100
-            status.value = "Lösche nicht mehr vorhandene Einträge ..."
-            self.cleanup()
+            if not stopped.value:
+                progress.value = 100
+                status.value = "Lösche nicht mehr vorhandene Einträge ..."
+                self.cleanup()
 
             status.value = "Erzeuge Index für Suchvorschläge ..."
             text.value = ""
@@ -155,7 +156,7 @@ class Crawler:
             doc['file'] = filePath
         else: return
 
-        if not os.exists(doc['file']):
+        if not os.path.exists(doc['file']):
             print("No file found")
             print(f"Deleting {solrDoc['id']} from index")
             self.solr.remove(solrDoc["id"])
