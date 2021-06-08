@@ -155,6 +155,13 @@ class Crawler:
             doc['file'] = filePath
         else: return
 
+        if not os.exists(doc['file']):
+            print("No file found")
+            print(f"Deleting {solrDoc['id']} from index")
+            self.solr.remove(solrDoc["id"])
+            self.fileCache.remove(solrDoc["id"])
+            return
+
         doc["md5"] = tomd5(filePath)
         print(doc["md5"])
         if md5 != doc["md5"]:
