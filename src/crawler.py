@@ -22,6 +22,7 @@ class Crawler:
         self.prozStop = manager.Value(c_bool, False)
         self.prozStartable = manager.Value(c_bool, True)
         self.prozAutorestart = manager.Value(c_bool, config.AUTORESTART)
+        self.autostart = config.AUTOSTART
         self.task = None
         self.fileCache = FileCache()
         self.indexedIDs = []
@@ -30,6 +31,9 @@ class Crawler:
         self.Documents = __import__(config.CRAWLER).Documents
 
         self.solr = Solr(config.SOLR_HOST, config.SOLR_PORT, config.SOLR_CORE)
+
+        if self.autostart:
+            self.start()
 
     def start(self):
         if self.prozStartable.value:
