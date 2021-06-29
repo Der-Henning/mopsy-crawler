@@ -2,10 +2,15 @@ import flask
 from flask import request, jsonify
 from crawler import Crawler
 import os
+import logging as log
 
-server = flask.Flask(__name__)
-server.config["DEBUG"] = True if os.getenv("DEBUG") == "true" else False
+LOGLEVEL = log.DEBUG if os.getenv("DEBUG") == "true" else log.INFO
 PORT = os.getenv("PORT", 80)
+
+log.basicConfig(level=LOGLEVEL, format='%(levelname)s - %(message)s',)
+
+server = flask.Flask("api")
+server.config["DEBUG"] = False
 
 crawler = Crawler()
 

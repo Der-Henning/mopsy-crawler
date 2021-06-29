@@ -2,6 +2,7 @@ import os
 import sys
 from multiprocessing import Process, Value, Manager
 from ctypes import c_wchar_p, c_bool, c_double
+from threading import Thread
 import hashlib
 import config
 import time
@@ -10,11 +11,13 @@ from solr import Solr
 from bs4 import BeautifulSoup
 from fileCache import FileCache
 from buildSchema import langs
+import logging as log
 
 fieldList = "id,md5,source,rating,publishers,document,authors,publicationDate,language,title_txt_*,subtitle_txt_*,tags_txt_*,summary_txt_*,creationDate,modificationDate"
 
 class Crawler:
     def __init__(self):
+        log.debug("Initializing Crawler ...")
         manager = Manager()
         self.prozStatus = manager.Value(c_wchar_p, "untätig")
         self.prozProgress = manager.Value(c_double, 0.0)
@@ -32,87 +35,96 @@ class Crawler:
 
         self.solr = Solr(config.SOLR_HOST, config.SOLR_PORT, config.SOLR_CORE)
 
+        self.whatchThread = Thread(target=self.whatchman)
+        self.whatchThread.start()
+
         if self.autostart:
+            log.info("Autostarting Crawler ...")
             self.start()
 
+    def whatchman(self):
+        while True:
+            time.sleep(10)
+            if self.prozAutorestart.get() and self.prozStartable.get() and not self.prozStop.get():
+                log.info("Restarting Crawler ...")
+                self.start()
+
     def start(self):
-        if self.prozStartable.value:
+        if self.prozStartable.get():
             self.indexedIDs = []
-            self.prozProgress.value = 0
-            self.prozStatus.value = "wird gestartet ..."
-            self.prozText.value = ""
-            self.prozStop.value = False
-            self.prozStartable.value = False
-            self.task = Process(target=self.worker, args=(self.prozStop, self.prozText, self.prozProgress, self.prozStatus, self.prozStartable, self.prozAutorestart))
+            self.prozProgress.set(0)
+            self.prozStatus.set("wird gestartet ...")
+            self.prozText.set("")
+            self.prozStop.set(False)
+            self.prozStartable.set(False)
+            self.task = Process(target=self.worker, args=(self.prozStop, self.prozText, self.prozProgress, self.prozStatus, self.prozStartable))
             self.task.start()
         return self.getStatus()
 
     def stop(self):
-        if not self.prozStartable.value:
-            self.prozStop.value = True
-            self.prozStatus.value = "wird gestopped ..."
+        if not self.prozStartable.get():
+            self.prozStop.set(True)
+            self.prozStatus.set("wird gestopped ...")
         return self.getStatus()
 
     def toggleAutorestart(self):
-        self.prozAutorestart.value = False if self.prozAutorestart.value else True
+        self.prozAutorestart.set(False) if self.prozAutorestart.get() else True
         return self.getStatus()
 
     def getStatus(self):
         return {
             "name": config.CRAWLER_NAME,
-            "status": self.prozStatus.value,
-            "progress": self.prozProgress.value,
-            "text": self.prozText.value,
-            "startable": self.prozStartable.value,
-            "autorestart": self.prozAutorestart.value
+            "status": self.prozStatus.get(),
+            "progress": self.prozProgress.get(),
+            "text": self.prozText.get(),
+            "startable": self.prozStartable.get(),
+            "autorestart": self.prozAutorestart.get()
         }
 
-    def worker(self, stopped, text, progress, status, startable, autorestart):
+    def worker(self, stopped, text, progress, status, startable):
         try:
-            status.value = "Calibre Datenbank einlesen ..."
+            status.set("Calibre Datenbank einlesen ...")
             documents = self.Documents()
-            status.value = "Dokumente werden indiziert ..."
+            status.set("Dokumente werden indiziert ...")
             for idx, doc in enumerate(documents):
-                if stopped.value:
+                if stopped.get():
                     break
                 try:
-                    progress.value = round(idx / len(documents) * 100, 2)
+                    progress.set(round(idx / len(documents) * 100, 2))
                     if "title" in doc:
-                        text.value = doc["title"]
-                        print(doc["title"])
+                        text.set(doc["title"])
+                        log.info(doc["title"])
                     if config.DIRECT_COMMIT:
                         self.solr.commit(doc)
                     else:
                         self.indexer(doc)
-                    self.indexedIDs.append(doc["id"])
                 except:
-                    print(sys.exc_info())
+                    log.error(sys.exc_info())
                 finally:
+                    self.indexedIDs.append(doc["id"])
                     time.sleep(config.SLEEP_TIME)
             
-            if not stopped.value:
-                progress.value = 100
-                status.value = "Lösche nicht mehr vorhandene Einträge ..."
+            if not stopped.get():
+                progress.set(100)
+                status.set("Lösche nicht mehr vorhandene Einträge ...")
                 self.cleanup()
 
-            status.value = "Erzeuge Index für Suchvorschläge ..."
-            text.value = ""
+            status.set("Erzeuge Index für Suchvorschläge ...")
+            text.set("")
             self.solr.buildDict()
 
-            status.value = "Optimiere SOLR Index ..."
+            status.set("Optimiere SOLR Index ...")
             self.solr.optimize()
 
-            if stopped.value:
-                status.value = "abgebrochen"
+            if stopped.get():
+                status.set("abgebrochen")
             else:
-                status.value = "fertig"
+                status.set("fertig")
         except:
-            status.value = "fehler: {}".format(sys.exc_info())
-            print(sys.exc_info())
+            status.set("fehler: {}".format(sys.exc_info()))
+            log.error(sys.exc_info())
         finally:
-            startable.value = True
-            if autorestart.value and not stopped.value:
-                self.start()
+            startable.set(True)
 
     def cleanup(self):
         numFound = 100
@@ -120,11 +132,17 @@ class Crawler:
         rows = 100
         while offset < numFound:
             try:
-                res = self.solr.select({"q": "*:*", "fl": fieldList, "rows": rows, "start": offset})
+                res = self.solr.select({
+                    "q": f"id:{config.SOLR_PREFIX}_*",
+                    "fl": fieldList,
+                    "fq": "deleted:false",
+                    "rows": rows,
+                    "start": offset
+                })
                 solrDocs = res["response"]["docs"]
                 for solrDoc in solrDocs:
                     if not solrDoc["id"] in self.indexedIDs:
-                        print(f"mark {solrDoc['id']} as deleted")
+                        log.info(f"mark {solrDoc['id']} as deleted")
                         doc = solrDoc
                         doc["deleted"] = True
                         doc["md5"] = ""
@@ -133,7 +151,7 @@ class Crawler:
                         self.fileCache.remove(solrDoc["id"])
                 numFound = res["response"]["numFound"]
             except:
-                print(sys.exc_info())
+                log.error(sys.exc_info())
             finally:
                 offset += rows
 
@@ -168,7 +186,7 @@ class Crawler:
         # if no file provided delete cached file
         # if exists in solr -> mark as deleted else stop
         if doc['file'] == None or not os.path.exists(doc['file']):
-            print("No file found")
+            log.info("No file found")
             self.fileCache.remove(doc["id"])
             if len(solrDoc["response"]["docs"]) > 0:
                 doc["deleted"] = True
@@ -182,12 +200,12 @@ class Crawler:
         # else extract data from file
         else:
             doc["md5"] = tomd5(filePath)
-            print(doc["md5"])
+            log.info(doc["md5"])
             if md5 != doc["md5"]:
-                print("new Document")
+                log.info("new Document")
                 extract = self.extractData(filePath)
                 if not extract:
-                    print("Error extracting data from file")
+                    log.info("Error extracting data from file")
                     return
                 if not "title" in doc: doc["title"] = extract["title"]
                 if "language" in extract and not "language" in doc: doc['language'] = extract['language']
@@ -196,7 +214,7 @@ class Crawler:
                 doc["pages"] = extract['pages']
                 doc["deleted"] = False
             else:
-                print("no changes")
+                log.info("no changes")
                 return
 
         # set document language for fields
@@ -234,10 +252,10 @@ class Crawler:
             content = extract["file"] if "file" in extract else extract[filename]
             meta = extract["file_metadata"] if "file_metadata" in extract else extract[f"{filename}_metadata"]
             meta = dict(zip(meta[::2], meta[1::2]))
-            data['title'] = meta['dc:title'][0] if 'dc:title' in meta else filename
+            data['title'] = meta['dc:title'][0] if 'dc:title' in meta and meta['dc:title'][0] != '' else filename
             data['pages'] = getPages(content)
             if "created" in meta: data['creationDate'] = meta['created'][0] 
             if "Last-Modified" in meta: data['modificationDate'] = meta['Last-Modified'][0]
             if "language" in meta: data['language'] = meta['language'][0].lower()
-        except: pass
+        except: log.error(sys.exc_info())
         return data
