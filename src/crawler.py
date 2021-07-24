@@ -133,7 +133,7 @@ class Crawler:
         while offset < numFound:
             try:
                 res = self.solr.select({
-                    "q": f"id:{config.SOLR_PREFIX}_*",
+                    "q": f'id:"{config.SOLR_PREFIX}_*"',
                     "fl": fieldList,
                     "fq": "deleted:false",
                     "rows": rows,
@@ -164,7 +164,7 @@ class Crawler:
             return hash_md5.hexdigest()
 
         # get existing doc from solr
-        solrDoc = self.solr.select({"q":f"id:{doc['id']}", "fl": fieldList})
+        solrDoc = self.solr.select({"q":f'id:"{doc["id"]}"', "fl": fieldList})
 
         # read md5 if exists
         md5 = ""
