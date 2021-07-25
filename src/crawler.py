@@ -16,6 +16,7 @@ from langdetect import detect
 
 fieldList = "id,md5,source,rating,publishers,document,authors,publicationDate,language,title_txt_*,subtitle_txt_*,tags_txt_*,summary_txt_*,creationDate,modificationDate"
 
+
 class Crawler:
     def __init__(self):
         log.debug("Initializing Crawler ...")
@@ -58,7 +59,8 @@ class Crawler:
             self.prozText.set("")
             self.prozStop.set(False)
             self.prozStartable.set(False)
-            self.task = Process(target=self.worker, args=(self.prozStop, self.prozText, self.prozProgress, self.prozStatus, self.prozStartable))
+            self.task = Process(target=self.worker, args=(
+                self.prozStop, self.prozText, self.prozProgress, self.prozStatus, self.prozStartable))
             self.task.start()
         return self.getStatus()
 
@@ -104,7 +106,7 @@ class Crawler:
                 finally:
                     self.indexedIDs.append(doc["id"])
                     time.sleep(config.SLEEP_TIME)
-            
+
             if not stopped.get():
                 progress.set(100)
                 status.set("Lösche nicht mehr vorhandene Einträge ...")
@@ -165,7 +167,7 @@ class Crawler:
             return hash_md5.hexdigest()
 
         # get existing doc from solr
-        solrDoc = self.solr.select({"q":f'id:"{doc["id"]}"', "fl": fieldList})
+        solrDoc = self.solr.select({"q": f'id:"{doc["id"]}"', "fl": fieldList})
 
         # read md5 if exists
         md5 = ""
@@ -195,7 +197,7 @@ class Crawler:
                 doc["md5"] = ""
             else:
                 return
-        
+
         # read file and compare md5
         # if md5 matches saved one -> stop
         # else extract data from file
@@ -208,10 +210,14 @@ class Crawler:
                 if not extract:
                     log.info("Error extracting data from file")
                     return
-                if not "title" in doc: doc["title"] = extract["title"]
-                if "language" in extract and not "language" in doc: doc['language'] = extract['language']
-                if "creationDate" in extract: doc["creationDate"] = extract["creationDate"]
-                if "modificationDate" in extract: doc["modificationDate"] = extract["modificationDate"]
+                if not "title" in doc:
+                    doc["title"] = extract["title"]
+                if "language" in extract and not "language" in doc:
+                    doc['language'] = extract['language']
+                if "creationDate" in extract:
+                    doc["creationDate"] = extract["creationDate"]
+                if "modificationDate" in extract:
+                    doc["modificationDate"] = extract["modificationDate"]
                 doc["pages"] = extract['pages']
                 doc["deleted"] = False
             else:
@@ -219,9 +225,11 @@ class Crawler:
                 return
 
         # set document language for fields
-        if not "language" in doc: doc["language"] = "other"
-        if not doc['language'] in langs: doc['language'] = "other"
-        if doc['language'] == "other" and "pages" in doc: 
+        if not "language" in doc:
+            doc["language"] = "other"
+        if not doc['language'] in langs:
+            doc['language'] = "other"
+        if doc['language'] == "other" and "pages" in doc:
             doc['language'] = self.detectLang(doc["pages"])
         if "title" in doc:
             doc[f"title_txt_{doc['language']}"] = doc["title"]
@@ -236,7 +244,8 @@ class Crawler:
             doc[f"summary_txt_{doc['language']}"] = doc["summary"]
             doc.pop("summary", None)
         if "pages" in doc:
-            doc.update({f"p_{num}_page_txt_{doc['language']}": page for num, page in enumerate(doc['pages'], start=1)})
+            doc.update({f"p_{num}_page_txt_{doc['language']}": page for num, page in enumerate(
+                doc['pages'], start=1)})
             doc.pop("pages", None)
         doc["scanDate"] = datetime.datetime.now().isoformat() + "Z"
 
@@ -253,14 +262,19 @@ class Crawler:
             extract = self.solr.extract(filePath)
             filename = os.path.basename(filePath)
             content = extract["file"] if "file" in extract else extract[filename]
-            meta = extract["file_metadata"] if "file_metadata" in extract else extract[f"{filename}_metadata"]
+            meta = extract["file_metadata"] if "file_metadata" in extract else extract[
+                f"{filename}_metadata"]
             meta = dict(zip(meta[::2], meta[1::2]))
             data['title'] = meta['dc:title'][0] if 'dc:title' in meta and meta['dc:title'][0] != '' else filename
             data['pages'] = getPages(content)
-            if "created" in meta: data['creationDate'] = meta['created'][0] 
-            if "Last-Modified" in meta: data['modificationDate'] = meta['Last-Modified'][0]
-            if "language" in meta: data['language'] = meta['language'][0].lower()
-        except: log.error(sys.exc_info())
+            if "created" in meta:
+                data['creationDate'] = meta['created'][0]
+            if "Last-Modified" in meta:
+                data['modificationDate'] = meta['Last-Modified'][0]
+            if "language" in meta:
+                data['language'] = meta['language'][0].lower()
+        except:
+            log.error(sys.exc_info())
         return data
 
     def detectLang(self, pages):
@@ -271,5 +285,5 @@ class Crawler:
                 counter[lang] += 1
             else:
                 counter[lang] = 1
-        sorted_counter = sorted(langs, key = langs.get, reverse=True)
+        sorted_counter = sorted(langs, key=counter.get, reverse=True)
         return sorted_counter[0]
