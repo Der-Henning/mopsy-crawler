@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from fileCache import FileCache
 from buildSchema import langs
 import logging as log
+from langdetect import detect
 
 fieldList = "id,md5,source,rating,publishers,document,authors,publicationDate,language,title_txt_*,subtitle_txt_*,tags_txt_*,summary_txt_*,creationDate,modificationDate"
 
@@ -220,6 +221,8 @@ class Crawler:
         # set document language for fields
         if not "language" in doc: doc["language"] = "other"
         if not doc['language'] in langs: doc['language'] = "other"
+        if doc['language'] == "other" and "pages" in doc: 
+            doc['language'] = self.detectLang(doc["pages"])
         if "title" in doc:
             doc[f"title_txt_{doc['language']}"] = doc["title"]
             doc.pop("title", None)
@@ -259,3 +262,14 @@ class Crawler:
             if "language" in meta: data['language'] = meta['language'][0].lower()
         except: log.error(sys.exc_info())
         return data
+
+    def detectLang(self, pages):
+        langs = [detect(page) for page in pages]
+        counter = {}
+        for lang in langs:
+            if lang in counter:
+                counter[lang] += 1
+            else:
+                counter[lang] = 1
+        sorted_counter = sorted(langs, key = langs.get, reverse=True)
+        return sorted_counter[0]
