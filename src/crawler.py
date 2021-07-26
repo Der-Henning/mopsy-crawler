@@ -278,12 +278,16 @@ class Crawler:
         return data
 
     def detectLang(self, pages):
-        langs = [detect(page) for page in pages]
-        counter = {}
-        for lang in langs:
-            if lang in counter:
-                counter[lang] += 1
-            else:
-                counter[lang] = 1
-        sorted_counter = sorted(langs, key=counter.get, reverse=True)
-        return sorted_counter[0]
+        try:
+            langs = [detect(page) for page in pages]
+            counter = {}
+            for lang in langs:
+                if lang in counter:
+                    counter[lang] += 1
+                else:
+                    counter[lang] = 1
+            sorted_counter = sorted(langs, key=counter.get, reverse=True)
+            return sorted_counter[0]
+        except:
+            log.error(sys.exc_info())
+            return "other"
