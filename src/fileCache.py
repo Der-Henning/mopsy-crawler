@@ -9,14 +9,11 @@ class FileCache:
             os.makedirs(self.cacheFolder)
         
     def download(self, link, docID):
-        try:
-            r = requests.get(link, allow_redirects=True)
-            r.raise_for_status()
-            filePath = f"{self.cacheFolder}/{docID}.pdf"
-            open(filePath, 'wb').write(r.content)
-            return filePath
-        except:
-            return None
+        r = requests.get(link, allow_redirects=True)
+        r.raise_for_status()
+        filePath = f"{self.cacheFolder}/{docID}.pdf"
+        open(filePath, 'wb').write(r.content)
+        return filePath
 
     def remove(self, docID):
         filePath = f"{self.cacheFolder}/{docID}.pdf"

@@ -7,7 +7,7 @@ import logging as log
 LOGLEVEL = log.DEBUG if os.getenv("DEBUG") == "true" else log.INFO
 PORT = os.getenv("PORT", 80)
 
-log.basicConfig(level=LOGLEVEL, format='%(levelname)s - %(message)s',)
+log.basicConfig(level=LOGLEVEL, format='%(levelname)s - %(name)s - %(message)s',)
 
 server = flask.Flask("api")
 server.config["DEBUG"] = False
